@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07100f">
+  <title>Page Studio · Ocean Liner Curator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <span class="eyebrow">Ocean Liner Curator</span>
+        <h1>Page Studio</h1>
+      </div>
+      <a class="suite-link" href="https://curator.oceanliners.net/">Back to CuratorOS</a>
+    </header>
+
+    <section class="loader-panel" aria-labelledby="open-page-title">
+      <div>
+        <span class="eyebrow">Open a page</span>
+        <h2 id="open-page-title">Load any OceanLiners.net page into a safe editing workspace.</h2>
+        <p>Paste a live URL or choose a local HTML file. Nothing is published until you explicitly export or send changes to GitHub.</p>
+      </div>
+      <div class="loader-controls">
+        <label>
+          <span>Page URL</span>
+          <input id="page-url" type="url" inputmode="url" placeholder="https://oceanliners.net/ships/rms-olympic">
+        </label>
+        <button id="load-url" type="button">Load URL</button>
+        <button id="open-file" type="button">Open HTML File</button>
+        <input id="file-input" type="file" accept="text/html,.html,.htm" hidden>
+      </div>
+      <p id="status" class="status" role="status">Ready.</p>
+    </section>
+
+    <section class="studio" aria-label="Page editing workspace">
+      <div class="studio-toolbar">
+        <div class="view-switcher" role="tablist" aria-label="Editor view">
+          <button class="active" data-view="live" role="tab" aria-selected="true">Live</button>
+          <button data-view="code" role="tab" aria-selected="false">Code</button>
+          <button data-view="split" role="tab" aria-selected="false">Split</button>
+        </div>
+        <div class="toolbar-actions">
+          <button id="refresh-preview" type="button">Refresh Preview</button>
+          <button id="save-draft" type="button">Save Draft</button>
+          <button id="download-html" type="button">Download HTML</button>
+        </div>
+      </div>
+
+      <div id="workspace" class="workspace view-live">
+        <section class="preview-pane" aria-label="Live preview">
+          <div class="pane-header">
+            <div>
+              <span class="eyebrow">Live view</span>
+              <strong id="preview-label">Untitled page</strong>
+            </div>
+            <div class="device-switcher" aria-label="Preview width">
+              <button data-device="desktop" class="active" type="button">Desktop</button>
+              <button data-device="tablet" type="button">Tablet</button>
+              <button data-device="mobile" type="button">Mobile</button>
+            </div>
+          </div>
+          <div class="preview-stage" data-device-frame="desktop">
+            <iframe id="preview" title="Editable page preview" sandbox="allow-same-origin"></iframe>
+          </div>
+        </section>
+
+        <section class="code-pane" aria-label="HTML code editor">
+          <div class="pane-header">
+            <div>
+              <span class="eyebrow">Code mode</span>
+              <strong>HTML source</strong>
+            </div>
+            <button id="format-code" type="button">Format</button>
+          </div>
+          <textarea id="code-editor" spellcheck="false" aria-label="HTML source code"></textarea>
+        </section>
+      </div>
+    </section>
+
+    <section class="publish-panel">
+      <div>
+        <span class="eyebrow">GitHub publishing</span>
+        <h2>Prepare a branch and pull request</h2>
+        <p>This MVP keeps publishing intentionally manual and safe. Download the edited HTML, then replace the matching file in GitHub or wire a server-side GitHub endpoint later.</p>
+      </div>
+      <div class="publish-grid">
+        <label><span>Repository</span><input id="repo-name" value="jaredmberger/ocean-liner-curator"></label>
+        <label><span>File path</span><input id="repo-path" placeholder="ships/rms-olympic.html"></label>
+        <label><span>Branch name</span><input id="branch-name" value="page-studio-edit"></label>
+        <label><span>Commit message</span><input id="commit-message" value="Edit page in Page Studio"></label>
+      </div>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
