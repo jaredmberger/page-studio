@@ -96,6 +96,7 @@
       button.dataset.path = path;
       button.style.setProperty('--outline-depth', String(Math.min(depth, 8)));
       button.innerHTML = `<strong>${escapeHtml(meta.title)}</strong><span>${escapeHtml(meta.detail)}</span>`;
+      if (path === currentPath) button.classList.add('is-selected');
       fragment.appendChild(button);
     }
     list.appendChild(fragment);
@@ -118,7 +119,14 @@
     target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
   }
 
+  function findOutlineButton(path) {
+    return [...list.querySelectorAll('.dom-outline-item')]
+      .find((item) => item.dataset.path === path) || null;
+  }
+
   function selectPath(path) {
+    if (!path) return;
+
     const doc = new DOMParser().parseFromString(editor.value, 'text/html');
     const target = doc.querySelector(path);
     if (!target) {
@@ -132,7 +140,7 @@
     currentText = (target.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 90);
 
     list.querySelectorAll('.dom-outline-item.is-selected').forEach((item) => item.classList.remove('is-selected'));
-    list.querySelector(`[data-path="${CSS.escape(path)}"]`)?.classList.add('is-selected');
+    findOutlineButton(path)?.classList.add('is-selected');
     outlineInPreview(path);
 
     window.postMessage({
@@ -146,10 +154,17 @@
     status(`Selected ${currentTag} from the document map.`);
   }
 
-  list.addEventListener('click', (event) => {
+  function handleOutlineActivation(event) {
     const button = event.target.closest('.dom-outline-item');
-    if (!button) return;
+    if (!button || !list.contains(button)) return;
+    event.preventDefault();
+    event.stopPropagation();
     selectPath(button.dataset.path || '');
+  }
+
+  list.addEventListener('click', handleOutlineActivation);
+  list.addEventListener('pointerup', (event) => {
+    if (event.pointerType === 'touch' || event.pointerType === 'pen') handleOutlineActivation(event);
   });
 
   refreshButton.addEventListener('click', () => {
