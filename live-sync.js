@@ -14,19 +14,26 @@
   let indexed = [];
   let inspectorCleanup = null;
   let lastTouchAt = 0;
+  let installTimer = 0;
   const ignored = new Set(['HTML', 'HEAD', 'BODY', 'SCRIPT', 'STYLE', 'LINK', 'META', 'BASE', 'TITLE']);
 
   toggle.addEventListener('click', () => {
     enabled = !enabled;
     toggle.setAttribute('aria-pressed', String(enabled));
     toggle.textContent = `Selection Sync: ${enabled ? 'On' : 'Off'}`;
-    if (!enabled) clearHighlight();
+    if (!enabled) {
+      clearHighlight();
+      inspectorCleanup?.();
+      inspectorCleanup = null;
+    } else {
+      scheduleInspectorInstall();
+    }
     selectionStatus.textContent = enabled
       ? 'Tap an element in Live view to jump to its HTML. Move the code cursor to highlight the matching element.'
       : 'Selection synchronization is paused.';
   });
 
-  preview.addEventListener('load', installPreviewInspector);
+  preview.addEventListener('load', scheduleInspectorInstall);
   codeEditor.addEventListener('click', queueCursorSync);
   codeEditor.addEventListener('keyup', queueCursorSync);
   codeEditor.addEventListener('select', queueCursorSync);
@@ -35,17 +42,38 @@
     lastSource = '';
   });
 
+  // The initial srcdoc preview can finish before this script is evaluated on iPad Safari.
+  // Install immediately when a document is already present, and retry briefly while it settles.
+  scheduleInspectorInstall();
+
+  function scheduleInspectorInstall() {
+    clearTimeout(installTimer);
+    let attempts = 0;
+    const tryInstall = () => {
+      attempts++;
+      const doc = getPreviewDocument();
+      if (doc?.documentElement && doc.body) {
+        installPreviewInspector();
+        return;
+      }
+      if (attempts < 20) installTimer = setTimeout(tryInstall, 100);
+      else selectionStatus.textContent = 'Selection Sync could not attach to the preview. Refresh Preview and try again.';
+    };
+    tryInstall();
+  }
+
   function installPreviewInspector() {
     inspectorCleanup?.();
     inspectorCleanup = null;
     if (!enabled) return;
     const doc = getPreviewDocument();
-    if (!doc) return;
+    if (!doc?.documentElement || !doc.body) return;
 
+    doc.querySelectorAll('[data-page-studio-sync]').forEach(node => node.remove());
     const style = doc.createElement('style');
     style.setAttribute('data-page-studio-sync', '');
     style.textContent = '[data-page-studio-selected]{outline:3px solid #d2b875!important;outline-offset:3px!important;box-shadow:0 0 0 5px rgba(7,16,15,.55)!important;cursor:pointer!important;touch-action:manipulation!important}';
-    doc.head?.appendChild(style);
+    (doc.head || doc.documentElement).appendChild(style);
 
     const onTouchEnd = (event) => {
       lastTouchAt = Date.now();
@@ -76,6 +104,8 @@
       doc.removeEventListener('pointerdown', onPointerDown, true);
       style.remove();
     };
+
+    selectionStatus.textContent = 'Selection Sync is attached. Tap an element in Live view to jump to its HTML.';
   }
 
   function suppressNavigation(event) {
