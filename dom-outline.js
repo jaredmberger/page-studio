@@ -2,6 +2,7 @@
   const editor = document.querySelector('#code-editor');
   const preview = document.querySelector('#preview');
   const statusEl = document.querySelector('#status');
+  const toggleButton = document.querySelector('#toggle-document-map');
   if (!editor || !preview) return;
 
   let currentPath = '';
@@ -11,6 +12,7 @@
 
   const panel = document.createElement('aside');
   panel.className = 'dom-outline-panel';
+  panel.hidden = true;
   panel.innerHTML = `
     <div class="dom-outline-heading">
       <div>
@@ -19,7 +21,7 @@
       </div>
       <button type="button" data-outline-refresh>Refresh</button>
     </div>
-    <p class="dom-outline-help">Tap an item here, or tap directly in the live preview, to select and edit an element. Drag inside the preview to scroll.</p>
+    <p class="dom-outline-help">Use this optional fallback to select elements by structure. Direct selection in the live preview remains the primary editing method.</p>
     <div class="dom-outline-list" data-outline-list></div>
   `;
 
@@ -278,13 +280,28 @@
     status('Document map refreshed.');
   });
 
-  editor.addEventListener('input', debounce(renderOutline, 500));
+  toggleButton?.addEventListener('click', () => {
+    const shouldOpen = panel.hidden;
+    panel.hidden = !shouldOpen;
+    toggleButton.setAttribute('aria-expanded', String(shouldOpen));
+    toggleButton.classList.toggle('active', shouldOpen);
+    if (shouldOpen) {
+      renderOutline();
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      status('Document Map opened.');
+    } else {
+      status('Document Map hidden.');
+    }
+  });
+
+  editor.addEventListener('input', debounce(() => {
+    if (!panel.hidden) renderOutline();
+  }, 500));
   preview.addEventListener('load', () => {
     if (currentPath) outlineInPreview(currentPath);
     requestAnimationFrame(syncOverlayToIframe);
   });
 
-  renderOutline();
   requestAnimationFrame(syncOverlayToIframe);
 
   function debounce(fn, delay) {
