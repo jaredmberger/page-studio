@@ -73,10 +73,15 @@
           <button data-view="split" role="tab" aria-selected="false">Split</button>
         </div>
         <div class="toolbar-actions">
+          <button id="toggle-sync" type="button" aria-pressed="true">Selection Sync: On</button>
           <button id="refresh-preview" type="button">Refresh Preview</button>
           <button id="save-draft" type="button">Save Draft</button>
           <button id="download-html" type="button">Download HTML</button>
         </div>
+      </div>
+
+      <div id="selection-status" class="selection-status" role="status">
+        Tap an element in Live view to jump to its HTML. Move the code cursor to highlight the matching element.
       </div>
 
       <div id="workspace" class="workspace view-live">
