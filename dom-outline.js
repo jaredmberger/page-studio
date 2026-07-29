@@ -19,7 +19,7 @@
       </div>
       <button type="button" data-outline-refresh>Refresh</button>
     </div>
-    <p class="dom-outline-help">Tap an item here, or tap directly in the live preview, to select and edit an element. Drag normally to scroll through the page.</p>
+    <p class="dom-outline-help">Tap an item here, or tap directly in the live preview, to select and edit an element. Drag inside the preview to scroll.</p>
     <div class="dom-outline-list" data-outline-list></div>
   `;
 
@@ -128,7 +128,6 @@
     const target = doc.querySelector(path);
     if (!target) return;
     target.setAttribute('data-page-studio-outline-selected', '');
-    target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
   }
 
   function findOutlineButton(path) {
@@ -149,7 +148,7 @@
     const meta = labelFor(target);
     currentPath = path;
     currentTag = meta.tag;
-    currentText = (target.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 90);
+    currentText = (target.textContent || '').replace(/\s+/g, ' ').trim();
 
     list.querySelectorAll('.dom-outline-item.is-selected').forEach((item) => item.classList.remove('is-selected'));
     findOutlineButton(path)?.classList.add('is-selected');
@@ -197,14 +196,20 @@
     selectPath(cssPathFor(target), 'live preview');
   }
 
+  function getPreviewScroller() {
+    const doc = preview.contentDocument;
+    return doc?.scrollingElement || doc?.documentElement || null;
+  }
+
   function startGesture(event) {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
+    const scroller = getPreviewScroller();
     gesture = {
       id: event.pointerId,
       x: event.clientX,
       y: event.clientY,
-      stageLeft: previewStage?.scrollLeft || 0,
-      stageTop: previewStage?.scrollTop || 0,
+      scrollLeft: scroller?.scrollLeft || 0,
+      scrollTop: scroller?.scrollTop || 0,
       moved: false
     };
     overlay.setPointerCapture?.(event.pointerId);
@@ -215,10 +220,12 @@
     const dx = event.clientX - gesture.x;
     const dy = event.clientY - gesture.y;
     if (Math.abs(dx) > 6 || Math.abs(dy) > 6) gesture.moved = true;
-    if (!gesture.moved || !previewStage) return;
+    if (!gesture.moved) return;
     event.preventDefault();
-    previewStage.scrollLeft = gesture.stageLeft - dx;
-    previewStage.scrollTop = gesture.stageTop - dy;
+    const scroller = getPreviewScroller();
+    if (!scroller) return;
+    scroller.scrollLeft = gesture.scrollLeft - dx;
+    scroller.scrollTop = gesture.scrollTop - dy;
   }
 
   function endGesture(event) {
