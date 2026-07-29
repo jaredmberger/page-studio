@@ -7,6 +7,7 @@
   let currentPath = '';
   let currentTag = '';
   let currentText = '';
+  let gesture = null;
 
   const panel = document.createElement('aside');
   panel.className = 'dom-outline-panel';
@@ -18,7 +19,7 @@
       </div>
       <button type="button" data-outline-refresh>Refresh</button>
     </div>
-    <p class="dom-outline-help">Tap an item here, or tap directly in the live preview, to select and edit an element.</p>
+    <p class="dom-outline-help">Tap an item here, or tap directly in the live preview, to select and edit an element. Drag normally to scroll through the page.</p>
     <div class="dom-outline-list" data-outline-list></div>
   `;
 
@@ -32,7 +33,6 @@
   const overlay = document.createElement('div');
   overlay.className = 'preview-selection-overlay';
   overlay.setAttribute('aria-label', 'Select an element in the live preview');
-  overlay.setAttribute('role', 'application');
   overlay.tabIndex = 0;
   previewStage?.appendChild(overlay);
 
@@ -168,8 +168,11 @@
 
   function nearestEditableTarget(target) {
     if (!target || target.nodeType !== 1) return null;
-    const selector = 'main,header,nav,section,article,aside,footer,h1,h2,h3,h4,h5,h6,p,blockquote,figure,figcaption,img,a,button,ul,ol,li,table,thead,tbody,tr,th,td,div';
-    return target.closest(selector);
+    const leafSelector = 'a,button,img,figcaption,h1,h2,h3,h4,h5,h6,p,blockquote,li,th,td';
+    const leaf = target.closest(leafSelector);
+    if (leaf) return leaf;
+    const containerSelector = 'figure,table,ul,ol,nav,header,footer,aside,article,section,main,div';
+    return target.closest(containerSelector);
   }
 
   function selectFromOverlayPoint(clientX, clientY) {
@@ -194,24 +197,45 @@
     selectPath(cssPathFor(target), 'live preview');
   }
 
-  function handleOverlayPointer(event) {
+  function startGesture(event) {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    gesture = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      stageLeft: previewStage?.scrollLeft || 0,
+      stageTop: previewStage?.scrollTop || 0,
+      moved: false
+    };
+    overlay.setPointerCapture?.(event.pointerId);
+  }
+
+  function moveGesture(event) {
+    if (!gesture || event.pointerId !== gesture.id) return;
+    const dx = event.clientX - gesture.x;
+    const dy = event.clientY - gesture.y;
+    if (Math.abs(dx) > 6 || Math.abs(dy) > 6) gesture.moved = true;
+    if (!gesture.moved || !previewStage) return;
+    event.preventDefault();
+    previewStage.scrollLeft = gesture.stageLeft - dx;
+    previewStage.scrollTop = gesture.stageTop - dy;
+  }
+
+  function endGesture(event) {
+    if (!gesture || event.pointerId !== gesture.id) return;
+    const moved = gesture.moved;
+    gesture = null;
+    overlay.releasePointerCapture?.(event.pointerId);
+    if (moved) return;
     event.preventDefault();
     event.stopPropagation();
     selectFromOverlayPoint(event.clientX, event.clientY);
   }
 
-  overlay.addEventListener('pointerup', handleOverlayPointer);
-  overlay.addEventListener('click', (event) => {
-    if (event.detail === 0) return;
-    handleOverlayPointer(event);
-  });
-  overlay.addEventListener('touchend', (event) => {
-    const touch = event.changedTouches?.[0];
-    if (!touch) return;
-    event.preventDefault();
-    event.stopPropagation();
-    selectFromOverlayPoint(touch.clientX, touch.clientY);
-  }, { passive: false });
+  overlay.addEventListener('pointerdown', startGesture);
+  overlay.addEventListener('pointermove', moveGesture, { passive: false });
+  overlay.addEventListener('pointerup', endGesture);
+  overlay.addEventListener('pointercancel', () => { gesture = null; });
 
   function syncOverlayToIframe() {
     if (!previewStage) return;
