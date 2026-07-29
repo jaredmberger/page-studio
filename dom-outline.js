@@ -7,7 +7,6 @@
   let currentPath = '';
   let currentTag = '';
   let currentText = '';
-  let previewListenersAttached = false;
 
   const panel = document.createElement('aside');
   panel.className = 'dom-outline-panel';
@@ -28,6 +27,14 @@
 
   const list = panel.querySelector('[data-outline-list]');
   const refreshButton = panel.querySelector('[data-outline-refresh]');
+  const previewStage = preview.closest('.preview-stage');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'preview-selection-overlay';
+  overlay.setAttribute('aria-label', 'Select an element in the live preview');
+  overlay.setAttribute('role', 'application');
+  overlay.tabIndex = 0;
+  previewStage?.appendChild(overlay);
 
   function status(message, isError = false) {
     if (!statusEl) return;
@@ -108,7 +115,7 @@
     if (!style) {
       style = doc.createElement('style');
       style.dataset.pageStudioOutlineStyle = '';
-      style.textContent = '[data-page-studio-outline-selected]{outline:3px solid #bfa46a!important;outline-offset:3px!important;scroll-margin:90px!important;cursor:pointer!important;}';
+      style.textContent = '[data-page-studio-outline-selected]{outline:3px solid #bfa46a!important;outline-offset:3px!important;scroll-margin:90px!important;}';
       (doc.head || doc.documentElement).appendChild(style);
     }
   }
@@ -165,42 +172,62 @@
     return target.closest(selector);
   }
 
-  function selectFromPreviewEvent(event) {
+  function selectFromOverlayPoint(clientX, clientY) {
     const doc = preview.contentDocument;
-    if (!doc) return;
-    const rawTarget = event.target && event.target.nodeType === 1
-      ? event.target
-      : doc.elementFromPoint(event.clientX, event.clientY);
+    if (!doc) {
+      status('The preview document is not available yet.', true);
+      return;
+    }
+
+    const iframeRect = preview.getBoundingClientRect();
+    const x = clientX - iframeRect.left;
+    const y = clientY - iframeRect.top;
+    if (x < 0 || y < 0 || x > iframeRect.width || y > iframeRect.height) return;
+
+    const rawTarget = doc.elementFromPoint(x, y);
     const target = nearestEditableTarget(rawTarget);
-    if (!target || target === doc.documentElement || target === doc.body) return;
-    event.preventDefault();
-    event.stopPropagation();
+    if (!target || target === doc.documentElement || target === doc.body) {
+      status('No editable element was found at that point.', true);
+      return;
+    }
+
     selectPath(cssPathFor(target), 'live preview');
   }
 
-  function attachPreviewHitTesting() {
-    const doc = preview.contentDocument;
-    if (!doc || previewListenersAttached) return;
-    previewListenersAttached = true;
-    ensurePreviewStyle(doc);
-    doc.addEventListener('click', selectFromPreviewEvent, true);
-    doc.addEventListener('pointerup', (event) => {
-      if (event.pointerType === 'touch' || event.pointerType === 'pen') selectFromPreviewEvent(event);
-    }, true);
-    doc.addEventListener('touchend', (event) => {
-      const touch = event.changedTouches?.[0];
-      if (!touch) return;
-      const target = doc.elementFromPoint(touch.clientX, touch.clientY);
-      if (!target) return;
-      selectFromPreviewEvent({
-        target,
-        clientX: touch.clientX,
-        clientY: touch.clientY,
-        preventDefault: () => event.preventDefault(),
-        stopPropagation: () => event.stopPropagation()
-      });
-    }, { capture: true, passive: false });
+  function handleOverlayPointer(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    selectFromOverlayPoint(event.clientX, event.clientY);
   }
+
+  overlay.addEventListener('pointerup', handleOverlayPointer);
+  overlay.addEventListener('click', (event) => {
+    if (event.detail === 0) return;
+    handleOverlayPointer(event);
+  });
+  overlay.addEventListener('touchend', (event) => {
+    const touch = event.changedTouches?.[0];
+    if (!touch) return;
+    event.preventDefault();
+    event.stopPropagation();
+    selectFromOverlayPoint(touch.clientX, touch.clientY);
+  }, { passive: false });
+
+  function syncOverlayToIframe() {
+    if (!previewStage) return;
+    const stageRect = previewStage.getBoundingClientRect();
+    const iframeRect = preview.getBoundingClientRect();
+    overlay.style.left = `${iframeRect.left - stageRect.left + previewStage.scrollLeft}px`;
+    overlay.style.top = `${iframeRect.top - stageRect.top + previewStage.scrollTop}px`;
+    overlay.style.width = `${iframeRect.width}px`;
+    overlay.style.height = `${iframeRect.height}px`;
+  }
+
+  const resizeObserver = new ResizeObserver(syncOverlayToIframe);
+  resizeObserver.observe(preview);
+  resizeObserver.observe(previewStage || preview);
+  previewStage?.addEventListener('scroll', syncOverlayToIframe, { passive: true });
+  window.addEventListener('resize', syncOverlayToIframe, { passive: true });
 
   function handleOutlineActivation(event) {
     const button = event.target.closest('.dom-outline-item');
@@ -222,13 +249,12 @@
 
   editor.addEventListener('input', debounce(renderOutline, 500));
   preview.addEventListener('load', () => {
-    previewListenersAttached = false;
-    attachPreviewHitTesting();
     if (currentPath) outlineInPreview(currentPath);
+    requestAnimationFrame(syncOverlayToIframe);
   });
 
   renderOutline();
-  attachPreviewHitTesting();
+  requestAnimationFrame(syncOverlayToIframe);
 
   function debounce(fn, delay) {
     let timer;
