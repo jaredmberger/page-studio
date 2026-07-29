@@ -73,21 +73,11 @@
           <button data-view="split" role="tab" aria-selected="false">Split</button>
         </div>
         <div class="toolbar-actions">
-          <button id="toggle-sync" type="button" aria-pressed="true">Selection Sync: On</button>
           <button id="refresh-preview" type="button">Refresh Preview</button>
           <button id="save-draft" type="button">Save Draft</button>
           <button id="download-html" type="button">Download HTML</button>
         </div>
       </div>
-
-      <div id="selection-status" class="selection-status" role="status">
-        Tap an element in Live view to jump to its HTML. Move the code cursor to highlight the matching element.
-      </div>
-
-      <details class="sync-diagnostics" open>
-        <summary>Selection Sync diagnostics</summary>
-        <div id="sync-diagnostics" class="validation-list" aria-live="polite"></div>
-      </details>
 
       <div id="workspace" class="workspace view-live">
         <section class="preview-pane" aria-label="Live preview">
@@ -103,7 +93,7 @@
             </div>
           </div>
           <div class="preview-stage" data-device-frame="desktop">
-            <iframe id="preview" title="Editable page preview" sandbox="allow-same-origin allow-scripts"></iframe>
+            <iframe id="preview" title="Editable page preview" sandbox="allow-same-origin"></iframe>
           </div>
         </section>
 
@@ -137,8 +127,5 @@
 
   <script src="config.js"></script>
   <script src="app.js"></script>
-  <script src="preview-scroll-fix.js"></script>
-  <script src="live-sync.js"></script>
-  <script src="selection-match-repair.js"></script>
 </body>
 </html>
