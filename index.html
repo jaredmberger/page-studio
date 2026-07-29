@@ -8,6 +8,7 @@
   <meta name="googlebot" content="noindex,nofollow,noarchive,nosnippet,noimageindex">
   <title>Page Studio · Ocean Liner Curator</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="publishing.css">
 </head>
 <body>
   <div class="app-shell">
@@ -47,30 +48,21 @@
       </div>
       <div class="inspector-grid">
         <details class="inspector-card inspector-disclosure">
-          <summary>
-            <span>Validation</span>
-            <span class="inspector-chevron" aria-hidden="true">▾</span>
-          </summary>
+          <summary><span>Validation</span><span class="inspector-chevron" aria-hidden="true">▾</span></summary>
           <div class="inspector-card__content">
             <div id="validation-summary" class="validation-summary">Load a page to begin.</div>
             <div id="validation-list" class="validation-list"></div>
           </div>
         </details>
         <details class="inspector-card inspector-disclosure">
-          <summary>
-            <span>Internal links</span>
-            <span class="inspector-chevron" aria-hidden="true">▾</span>
-          </summary>
+          <summary><span>Internal links</span><span class="inspector-chevron" aria-hidden="true">▾</span></summary>
           <div class="inspector-card__content">
             <div id="link-summary" class="validation-summary">No page loaded.</div>
             <div id="link-suggestions" class="validation-list"></div>
           </div>
         </details>
         <details class="inspector-card inspector-disclosure">
-          <summary>
-            <span>Quick actions</span>
-            <span class="inspector-chevron" aria-hidden="true">▾</span>
-          </summary>
+          <summary><span>Quick actions</span><span class="inspector-chevron" aria-hidden="true">▾</span></summary>
           <div class="inspector-card__content">
             <div class="quick-actions">
               <button id="add-missing-alt" type="button">Add placeholder alt text</button>
@@ -100,10 +92,7 @@
       <div id="workspace" class="workspace view-live">
         <section class="preview-pane" aria-label="Live preview">
           <div class="pane-header">
-            <div>
-              <span class="eyebrow">Live view</span>
-              <strong id="preview-label">Untitled page</strong>
-            </div>
+            <div><span class="eyebrow">Live view</span><strong id="preview-label">Untitled page</strong></div>
             <div class="device-switcher" aria-label="Preview width">
               <button data-device="desktop" class="active" type="button">Desktop</button>
               <button data-device="tablet" type="button">Tablet</button>
@@ -117,10 +106,7 @@
 
         <section class="code-pane" aria-label="HTML code editor">
           <div class="pane-header">
-            <div>
-              <span class="eyebrow">Code mode</span>
-              <strong>HTML source</strong>
-            </div>
+            <div><span class="eyebrow">Code mode</span><strong>HTML source</strong></div>
             <button id="format-code" type="button">Format</button>
           </div>
           <textarea id="code-editor" spellcheck="false" aria-label="HTML source code"></textarea>

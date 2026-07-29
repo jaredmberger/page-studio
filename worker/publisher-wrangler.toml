@@ -1,0 +1,9 @@
+name = "page-studio-publisher"
+main = "publisher.js"
+compatibility_date = "2026-07-29"
+workers_dev = true
+
+[vars]
+ALLOWED_ORIGINS = "https://page-studio.pages.dev,https://page-studio.oceanliners.net"
+ALLOWED_REPOSITORIES = "jaredmberger/ocean-liner-curator"
+PUBLISHER_EMAILS = ""
