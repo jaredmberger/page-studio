@@ -7,6 +7,7 @@
   let currentPath = '';
   let currentTag = '';
   let currentText = '';
+  let previewListenersAttached = false;
 
   const panel = document.createElement('aside');
   panel.className = 'dom-outline-panel';
@@ -18,7 +19,7 @@
       </div>
       <button type="button" data-outline-refresh>Refresh</button>
     </div>
-    <p class="dom-outline-help">Tap an item here to select the matching element in the live preview. This works independently of iframe click handling.</p>
+    <p class="dom-outline-help">Tap an item here, or tap directly in the live preview, to select and edit an element.</p>
     <div class="dom-outline-list" data-outline-list></div>
   `;
 
@@ -102,17 +103,21 @@
     list.appendChild(fragment);
   }
 
-  function outlineInPreview(path) {
-    const doc = preview.contentDocument;
-    if (!doc) return;
-    doc.querySelectorAll('[data-page-studio-outline-selected]').forEach((el) => el.removeAttribute('data-page-studio-outline-selected'));
+  function ensurePreviewStyle(doc) {
     let style = doc.querySelector('style[data-page-studio-outline-style]');
     if (!style) {
       style = doc.createElement('style');
       style.dataset.pageStudioOutlineStyle = '';
-      style.textContent = '[data-page-studio-outline-selected]{outline:3px solid #bfa46a!important;outline-offset:3px!important;scroll-margin:90px!important;}';
+      style.textContent = '[data-page-studio-outline-selected]{outline:3px solid #bfa46a!important;outline-offset:3px!important;scroll-margin:90px!important;cursor:pointer!important;}';
       (doc.head || doc.documentElement).appendChild(style);
     }
+  }
+
+  function outlineInPreview(path) {
+    const doc = preview.contentDocument;
+    if (!doc) return;
+    ensurePreviewStyle(doc);
+    doc.querySelectorAll('[data-page-studio-outline-selected]').forEach((el) => el.removeAttribute('data-page-studio-outline-selected'));
     const target = doc.querySelector(path);
     if (!target) return;
     target.setAttribute('data-page-studio-outline-selected', '');
@@ -124,7 +129,7 @@
       .find((item) => item.dataset.path === path) || null;
   }
 
-  function selectPath(path) {
+  function selectPath(path, source = 'document map') {
     if (!path) return;
 
     const doc = new DOMParser().parseFromString(editor.value, 'text/html');
@@ -148,10 +153,53 @@
       path: currentPath,
       tag: currentTag,
       text: currentText,
-      source: 'outline'
+      source
     }, '*');
 
-    status(`Selected ${currentTag} from the document map.`);
+    status(`Selected ${currentTag} from the ${source}.`);
+  }
+
+  function nearestEditableTarget(target) {
+    if (!target || target.nodeType !== 1) return null;
+    const selector = 'main,header,nav,section,article,aside,footer,h1,h2,h3,h4,h5,h6,p,blockquote,figure,figcaption,img,a,button,ul,ol,li,table,thead,tbody,tr,th,td,div';
+    return target.closest(selector);
+  }
+
+  function selectFromPreviewEvent(event) {
+    const doc = preview.contentDocument;
+    if (!doc) return;
+    const rawTarget = event.target && event.target.nodeType === 1
+      ? event.target
+      : doc.elementFromPoint(event.clientX, event.clientY);
+    const target = nearestEditableTarget(rawTarget);
+    if (!target || target === doc.documentElement || target === doc.body) return;
+    event.preventDefault();
+    event.stopPropagation();
+    selectPath(cssPathFor(target), 'live preview');
+  }
+
+  function attachPreviewHitTesting() {
+    const doc = preview.contentDocument;
+    if (!doc || previewListenersAttached) return;
+    previewListenersAttached = true;
+    ensurePreviewStyle(doc);
+    doc.addEventListener('click', selectFromPreviewEvent, true);
+    doc.addEventListener('pointerup', (event) => {
+      if (event.pointerType === 'touch' || event.pointerType === 'pen') selectFromPreviewEvent(event);
+    }, true);
+    doc.addEventListener('touchend', (event) => {
+      const touch = event.changedTouches?.[0];
+      if (!touch) return;
+      const target = doc.elementFromPoint(touch.clientX, touch.clientY);
+      if (!target) return;
+      selectFromPreviewEvent({
+        target,
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        preventDefault: () => event.preventDefault(),
+        stopPropagation: () => event.stopPropagation()
+      });
+    }, { capture: true, passive: false });
   }
 
   function handleOutlineActivation(event) {
@@ -174,10 +222,13 @@
 
   editor.addEventListener('input', debounce(renderOutline, 500));
   preview.addEventListener('load', () => {
+    previewListenersAttached = false;
+    attachPreviewHitTesting();
     if (currentPath) outlineInPreview(currentPath);
   });
 
   renderOutline();
+  attachPreviewHitTesting();
 
   function debounce(fn, delay) {
     let timer;
