@@ -46,24 +46,39 @@
         <span id="page-type" class="page-type">Unclassified page</span>
       </div>
       <div class="inspector-grid">
-        <article class="inspector-card">
-          <h3>Validation</h3>
-          <div id="validation-summary" class="validation-summary">Load a page to begin.</div>
-          <div id="validation-list" class="validation-list"></div>
-        </article>
-        <article class="inspector-card">
-          <h3>Internal links</h3>
-          <div id="link-summary" class="validation-summary">No page loaded.</div>
-          <div id="link-suggestions" class="validation-list"></div>
-        </article>
-        <article class="inspector-card">
-          <h3>Quick actions</h3>
-          <div class="quick-actions">
-            <button id="add-missing-alt" type="button">Add placeholder alt text</button>
-            <button id="normalize-external-links" type="button">Harden external links</button>
-            <button id="copy-page-report" type="button">Copy page report</button>
+        <details class="inspector-card inspector-disclosure">
+          <summary>
+            <span>Validation</span>
+            <span class="inspector-chevron" aria-hidden="true">▾</span>
+          </summary>
+          <div class="inspector-card__content">
+            <div id="validation-summary" class="validation-summary">Load a page to begin.</div>
+            <div id="validation-list" class="validation-list"></div>
           </div>
-        </article>
+        </details>
+        <details class="inspector-card inspector-disclosure">
+          <summary>
+            <span>Internal links</span>
+            <span class="inspector-chevron" aria-hidden="true">▾</span>
+          </summary>
+          <div class="inspector-card__content">
+            <div id="link-summary" class="validation-summary">No page loaded.</div>
+            <div id="link-suggestions" class="validation-list"></div>
+          </div>
+        </details>
+        <details class="inspector-card inspector-disclosure">
+          <summary>
+            <span>Quick actions</span>
+            <span class="inspector-chevron" aria-hidden="true">▾</span>
+          </summary>
+          <div class="inspector-card__content">
+            <div class="quick-actions">
+              <button id="add-missing-alt" type="button">Add placeholder alt text</button>
+              <button id="normalize-external-links" type="button">Harden external links</button>
+              <button id="copy-page-report" type="button">Copy page report</button>
+            </div>
+          </div>
+        </details>
       </div>
     </section>
 
