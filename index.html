@@ -84,6 +84,11 @@
         Tap an element in Live view to jump to its HTML. Move the code cursor to highlight the matching element.
       </div>
 
+      <details class="sync-diagnostics" open>
+        <summary>Selection Sync diagnostics</summary>
+        <div id="sync-diagnostics" class="validation-list" aria-live="polite"></div>
+      </details>
+
       <div id="workspace" class="workspace view-live">
         <section class="preview-pane" aria-label="Live preview">
           <div class="pane-header">
@@ -98,7 +103,7 @@
             </div>
           </div>
           <div class="preview-stage" data-device-frame="desktop">
-            <iframe id="preview" title="Editable page preview" sandbox="allow-same-origin"></iframe>
+            <iframe id="preview" title="Editable page preview" sandbox="allow-same-origin allow-scripts"></iframe>
           </div>
         </section>
 
