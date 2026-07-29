@@ -1,61 +1,81 @@
 # Page Studio
 
-Page Studio is the page-editing companion for the Ocean Liner Curator suite. It provides a mobile- and iPad-friendly workspace for opening an OceanLiners.net page, previewing it, editing its HTML, saving a local draft, and downloading the revised file.
+Page Studio is the iPad-friendly page editor and publishing companion for Ocean Liner Curator. It opens live OceanLiners.net pages or local HTML, supports visual and code editing, validates the result, and can send a reviewed edit to GitHub through a secure Cloudflare Worker.
 
-## Current MVP
+## Current workflow
 
-- Load OceanLiners.net page source through the included Cloudflare Worker
-- Open a local `.html` file directly in the browser
+- Load OceanLiners.net page source through the included Worker
+- Open local `.html` files
 - Live, Code, and Split views
-- Desktop, tablet, and mobile preview widths
-- Automatic preview refresh while editing
-- Local device draft storage
-- Basic HTML formatting
-- Download revised HTML
-- GitHub publishing fields prepared for a later authenticated backend
+- Desktop, tablet, and mobile previews
+- Direct element editing plus Undo, Redo, and Restore Original
+- Validation, internal-link suggestions, drafts, and HTML download
+- Publishing review followed by branch, commit, and pull-request creation
 
 ## Safety model
 
-Page Studio never modifies the production website directly. Editing happens inside a sandboxed preview. The Worker only accepts HTTPS URLs on `oceanliners.net` and `www.oceanliners.net`; it is not a general-purpose proxy. Publishing remains a deliberate, separate step.
+Page Studio never writes directly to the production branch. Editing happens inside a sandboxed preview. Publishing requires explicit confirmation and always targets a non-protected branch. The browser never receives or stores the GitHub credential; the Worker reads it from the encrypted `GITHUB_TOKEN` secret.
+
+The Worker also restricts publishing to `ALLOWED_REPOSITORY` and rejects requests from origins not listed in `ALLOWED_ORIGINS`.
 
 ## Deploy the frontend
 
-Serve the repository root as static files. GitHub Pages or Cloudflare Pages can publish directly from the `main` branch root.
+Serve the repository root as static files. GitHub Pages or Cloudflare Pages can publish directly from `main`.
 
-## Deploy the Cloudflare Worker
-
-The Worker lives in `worker/`, so a separate GitHub repository is not needed.
-
-1. In Cloudflare, open **Workers & Pages** and choose **Create application**.
-2. Import `jaredmberger/page-studio` from GitHub.
-3. Set the project root directory to `worker`.
-4. Use `npm run deploy` as the deploy command when Cloudflare requests one.
-5. Deploy the Worker. Cloudflare will provide a URL similar to `https://page-studio-loader.<account>.workers.dev`.
-6. Open `config.js` in this repository and set:
+`config.js` should point both services to the deployed Worker:
 
 ```js
 window.PAGE_STUDIO_CONFIG = {
   loaderBaseUrl: "https://page-studio-loader.<account>.workers.dev",
+  publisherBaseUrl: "https://page-studio-loader.<account>.workers.dev",
 };
 ```
 
-7. Update `worker/wrangler.toml` so `ALLOWED_ORIGINS` includes the exact deployed Page Studio frontend origin. Multiple origins are comma-separated.
-8. Redeploy the Worker and frontend after changing their configuration.
+## Deploy the Cloudflare Worker
 
-The Worker exposes:
+The Worker lives in `worker/`.
+
+1. In Cloudflare, open **Workers & Pages** and import `jaredmberger/page-studio`.
+2. Set the project root directory to `worker`.
+3. Use `npm run deploy` as the deploy command.
+4. Confirm these `worker/wrangler.toml` values:
+   - `ALLOWED_ORIGINS` contains the exact Page Studio frontend origin.
+   - `ALLOWED_REPOSITORY` is `jaredmberger/ocean-liner-curator`.
+   - `GITHUB_BASE_BRANCH` is `main`.
+5. Add the encrypted Worker secret from Cloudflare or Wrangler:
+
+```bash
+npx wrangler secret put GITHUB_TOKEN
+```
+
+Use a fine-grained GitHub token limited to `jaredmberger/ocean-liner-curator` with:
+
+- **Contents: Read and write**
+- **Pull requests: Read and write**
+- **Metadata: Read**
+
+Do not put the token in `wrangler.toml`, `config.js`, GitHub, or browser storage.
+
+6. Redeploy the Worker and frontend.
+
+For another authentication boundary, place the Worker behind Cloudflare Access. The frontend already sends requests with credentials enabled.
+
+## Worker endpoints
 
 - `GET /api/status`
 - `GET /api/load?url=https%3A%2F%2Foceanliners.net%2Fships%2Frms-olympic`
+- `POST /publish`
+- `POST /api/publish`
 
-Responses are JSON, use `Cache-Control: no-store`, validate HTML content types, and reject redirects outside the OceanLiners.net allowlist.
+The publishing endpoint validates the repository, path, branch, commit message, pull-request title, HTML payload, request origin, and payload size before contacting GitHub. It creates the branch when needed, creates or updates the file, opens a pull request, and returns its URL. Existing open pull requests for the same branch are reused.
 
 ## Local Worker development
 
-From the `worker` directory:
+From `worker/`:
 
 ```bash
 npm install
 npm run dev
 ```
 
-For local frontend testing, add the local frontend origin to `ALLOWED_ORIGINS` and place the local Wrangler URL in `config.js`.
+Add the local frontend origin to `ALLOWED_ORIGINS`. Local publishing still requires a `GITHUB_TOKEN` secret and should use a disposable test branch.
