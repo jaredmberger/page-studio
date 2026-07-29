@@ -4,6 +4,7 @@
   const workspace = document.querySelector('#workspace');
   const toggle = document.querySelector('#toggle-sync');
   const selectionStatus = document.querySelector('#selection-status');
+  const diagnostics = document.querySelector('#sync-diagnostics');
 
   if (!preview || !codeEditor || !workspace || !toggle || !selectionStatus) return;
 
@@ -13,6 +14,9 @@
   let indexed = [];
   let lastSelectedPath = '';
   const ignored = new Set(['HTML', 'HEAD', 'BODY', 'SCRIPT', 'STYLE', 'LINK', 'META', 'BASE', 'TITLE']);
+  const stages = new Map();
+
+  mark('parent-ready', true, 'Parent sync script loaded.');
 
   toggle.addEventListener('click', () => {
     enabled = !enabled;
@@ -22,17 +26,27 @@
       ? 'Selection Sync is ready. Tap an element in Live view to jump to its HTML.'
       : 'Selection synchronization is paused.';
     postToPreview({ type: 'page-studio-sync-state', enabled });
+    mark('toggle-state', true, `Selection Sync is ${enabled ? 'enabled' : 'disabled'}.`);
   });
 
   window.addEventListener('message', event => {
-    if (!enabled || event.source !== preview.contentWindow) return;
+    if (event.source !== preview.contentWindow) return;
     const data = event.data;
-    if (!data || data.type !== 'page-studio-select') return;
+    if (!data || typeof data.type !== 'string') return;
+
+    if (data.type === 'page-studio-diagnostic') {
+      mark(data.stage || 'preview-event', data.ok !== false, data.detail || 'Preview reported activity.');
+      return;
+    }
+
+    if (!enabled || data.type !== 'page-studio-select') return;
+    mark('parent-message', true, `Parent received selection message for <${data.tag || 'element'}>.`);
     handlePreviewMessage(data);
   });
 
   preview.addEventListener('load', () => {
     lastSelectedPath = '';
+    mark('iframe-load', true, 'Preview iframe load event fired.');
     postToPreview({ type: 'page-studio-sync-state', enabled });
     selectionStatus.textContent = enabled
       ? 'Selection Sync is ready. Tap an element in Live view to jump to its HTML.'
@@ -50,10 +64,12 @@
   function handlePreviewMessage(data) {
     const match = findSourceMatchFromMessage(data);
     if (!match) {
+      mark('source-match', false, `Message arrived, but <${data.tag || 'element'}> could not be matched to source.`);
       selectionStatus.textContent = `Selected <${data.tag || 'element'}>, but its source could not be located reliably.`;
       return;
     }
 
+    mark('source-match', true, `Matched <${data.tag}> to lines ${lineAt(match.start)}–${lineAt(match.end)}.`);
     showSplitView();
     try { codeEditor.focus({ preventScroll: true }); } catch { codeEditor.focus(); }
     codeEditor.setSelectionRange(match.start, match.end);
@@ -165,7 +181,20 @@
   }
 
   function postToPreview(message) {
-    try { preview.contentWindow?.postMessage(message, '*'); } catch {}
+    try {
+      preview.contentWindow?.postMessage(message, '*');
+      mark('parent-send', true, `Parent sent “${message.type}” to preview.`);
+    } catch (error) {
+      mark('parent-send', false, `Parent could not message preview: ${error.message}`);
+    }
+  }
+
+  function mark(key, ok, detail) {
+    stages.set(key, { ok, detail, time: new Date().toLocaleTimeString() });
+    if (!diagnostics) return;
+    diagnostics.innerHTML = [...stages.values()].map(item =>
+      `<div class="validation-item ${item.ok ? 'ok' : 'error'}"><strong>${item.ok ? '✓' : '✗'} ${escapeHtml(item.detail)}</strong><span>${escapeHtml(item.time)}</span></div>`
+    ).join('');
   }
 
   function describeMessage(data) {
@@ -204,5 +233,9 @@
 
   function escapeRegex(value) {
     return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   }
 })();
