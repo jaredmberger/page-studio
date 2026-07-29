@@ -12,6 +12,8 @@
   let cursorTimer = 0;
   let lastSource = '';
   let indexed = [];
+  let inspectorCleanup = null;
+  let lastTouchAt = 0;
   const ignored = new Set(['HTML', 'HEAD', 'BODY', 'SCRIPT', 'STYLE', 'LINK', 'META', 'BASE', 'TITLE']);
 
   toggle.addEventListener('click', () => {
@@ -34,31 +36,65 @@
   });
 
   function installPreviewInspector() {
+    inspectorCleanup?.();
+    inspectorCleanup = null;
     if (!enabled) return;
     const doc = getPreviewDocument();
     if (!doc) return;
 
     const style = doc.createElement('style');
     style.setAttribute('data-page-studio-sync', '');
-    style.textContent = '[data-page-studio-selected]{outline:3px solid #d2b875!important;outline-offset:3px!important;box-shadow:0 0 0 5px rgba(7,16,15,.55)!important;cursor:pointer!important}';
+    style.textContent = '[data-page-studio-selected]{outline:3px solid #d2b875!important;outline-offset:3px!important;box-shadow:0 0 0 5px rgba(7,16,15,.55)!important;cursor:pointer!important;touch-action:manipulation!important}';
     doc.head?.appendChild(style);
 
-    doc.addEventListener('click', handlePreviewClick, true);
-    doc.addEventListener('pointerdown', suppressNavigation, true);
+    const onTouchEnd = (event) => {
+      lastTouchAt = Date.now();
+      handlePreviewSelection(event);
+    };
+    const onClick = (event) => {
+      if (Date.now() - lastTouchAt < 700) return;
+      handlePreviewSelection(event);
+    };
+    const onPointerUp = (event) => {
+      if (event.pointerType === 'touch') return;
+      handlePreviewSelection(event);
+    };
+    const onTouchStart = suppressNavigation;
+    const onPointerDown = suppressNavigation;
+
+    doc.addEventListener('touchend', onTouchEnd, true);
+    doc.addEventListener('click', onClick, true);
+    doc.addEventListener('pointerup', onPointerUp, true);
+    doc.addEventListener('touchstart', onTouchStart, { capture: true, passive: false });
+    doc.addEventListener('pointerdown', onPointerDown, true);
+
+    inspectorCleanup = () => {
+      doc.removeEventListener('touchend', onTouchEnd, true);
+      doc.removeEventListener('click', onClick, true);
+      doc.removeEventListener('pointerup', onPointerUp, true);
+      doc.removeEventListener('touchstart', onTouchStart, true);
+      doc.removeEventListener('pointerdown', onPointerDown, true);
+      style.remove();
+    };
   }
 
   function suppressNavigation(event) {
     if (!enabled) return;
     const target = event.target instanceof Element ? event.target.closest('a,button,input,select,textarea,label') : null;
-    if (target) event.preventDefault();
+    if (target && event.cancelable) event.preventDefault();
   }
 
-  function handlePreviewClick(event) {
+  function handlePreviewSelection(event) {
     if (!enabled) return;
-    event.preventDefault();
+    if (event.cancelable) event.preventDefault();
     event.stopPropagation();
 
-    const element = editableElement(event.target);
+    const rawTarget = event.target instanceof Element
+      ? event.target
+      : event.changedTouches?.[0]
+        ? getPreviewDocument()?.elementFromPoint(event.changedTouches[0].clientX, event.changedTouches[0].clientY)
+        : null;
+    const element = editableElement(rawTarget);
     if (!element) return;
 
     const match = findSourceMatch(element);
@@ -70,7 +106,7 @@
     }
 
     showSplitView();
-    codeEditor.focus({ preventScroll: true });
+    try { codeEditor.focus({ preventScroll: true }); } catch { codeEditor.focus(); }
     codeEditor.setSelectionRange(match.start, match.end);
     scrollEditorTo(match.start);
     selectionStatus.textContent = `Selected ${describeElement(element)} · jumped to lines ${lineAt(match.start)}–${lineAt(match.end)}.`;
