@@ -9,6 +9,7 @@
     'area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr'
   ]);
   const RAW_TEXT_ELEMENTS = new Set(['script','style','textarea','title']);
+  const NON_TARGET_ELEMENTS = new Set(['html','head','body','style','script','link','meta','base','title','noscript','template']);
   let sourceMap = new Map();
   let mappedSource = '';
   let refreshToken = 0;
@@ -26,6 +27,7 @@
     let output = '';
     let cursor = 0;
     let index = 0;
+    let insideBody = false;
 
     while (cursor < source.length) {
       const lt = source.indexOf('<', cursor);
@@ -76,6 +78,7 @@
         }
         output += rawTag;
         cursor = tagEnd + 1;
+        if (tagName === 'body') insideBody = false;
         continue;
       }
 
@@ -87,10 +90,20 @@
       }
 
       const tagName = openMatch[1].toLowerCase();
+      if (tagName === 'body') insideBody = true;
       const selfClosing = /\/\s*>$/.test(rawTag) || VOID_ELEMENTS.has(tagName);
-      const id = `ps-${++index}`;
-      const injected = injectAttribute(rawTag, ` data-page-studio-source-id="${id}"`);
-      map.set(id, { id, tagName, start: lt, openEnd: tagEnd + 1, end: selfClosing ? tagEnd + 1 : null });
+      const canTarget = insideBody && !NON_TARGET_ELEMENTS.has(tagName);
+      const id = canTarget ? `ps-${++index}` : '';
+      const injected = canTarget ? injectAttribute(rawTag, ` data-page-studio-source-id="${id}"`) : rawTag;
+      if (canTarget) {
+        map.set(id, {
+          id,
+          tagName,
+          start: lt,
+          openEnd: tagEnd + 1,
+          end: selfClosing ? tagEnd + 1 : null
+        });
+      }
       output += injected;
       cursor = tagEnd + 1;
 
@@ -103,8 +116,10 @@
             const rawEnd = findTagEnd(source, closeStart + 2);
             if (rawEnd !== -1) {
               output += source.slice(closeStart, rawEnd + 1);
-              const entry = map.get(id);
-              if (entry) entry.end = rawEnd + 1;
+              if (id) {
+                const entry = map.get(id);
+                if (entry) entry.end = rawEnd + 1;
+              }
               stack.pop();
               cursor = rawEnd + 1;
             }
@@ -114,6 +129,7 @@
     }
 
     for (const item of stack) {
+      if (!item.id) continue;
       const entry = map.get(item.id);
       if (entry && entry.end == null) entry.end = source.length;
     }
@@ -145,6 +161,23 @@
     return rawTag.slice(0, closeIndex) + attribute + rawTag.slice(closeIndex);
   }
 
+  function structuralPath(element, root) {
+    const parts = [];
+    let current = element;
+    while (current && current !== root && current.nodeType === 1) {
+      const tag = current.tagName.toLowerCase();
+      let index = 1;
+      let sibling = current.previousElementSibling;
+      while (sibling) {
+        if (sibling.tagName.toLowerCase() === tag) index++;
+        sibling = sibling.previousElementSibling;
+      }
+      parts.unshift(`${tag}:nth-of-type(${index})`);
+      current = current.parentElement;
+    }
+    return parts.join('>');
+  }
+
   function activateCodeView() {
     document.querySelectorAll('[data-view]').forEach((button) => {
       const active = button.dataset.view === 'split';
@@ -156,8 +189,7 @@
 
   function jumpToSource(entry) {
     if (!entry || editor.value !== mappedSource) {
-      status('The page changed after the preview was rendered. Refreshing the preview before locating the element.', true);
-      editor.dispatchEvent(new Event('input', { bubbles: true }));
+      status('The page changed after the preview was rendered. Refresh the preview, then select the element again.', true);
       return;
     }
     activateCodeView();
@@ -171,7 +203,7 @@
       const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 20;
       editor.scrollTop = Math.max(0, (line - 4) * lineHeight);
       editor.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      status(`Located exact <${entry.tagName}> source at line ${line}.`);
+      status(`Located the exact HTML <${entry.tagName}> element at line ${line}.`);
     });
   }
 
@@ -182,18 +214,26 @@
     mappedSource = source;
     sourceMap = result.map;
 
-    const doc = preview.contentDocument;
-    if (!doc || token !== refreshToken) return;
+    const liveDoc = preview.contentDocument;
+    if (!liveDoc || token !== refreshToken || !liveDoc.body) return;
     const mappedDoc = new DOMParser().parseFromString(result.html, 'text/html');
-    const mappedElements = mappedDoc.querySelectorAll('[data-page-studio-source-id]');
-    const liveElements = doc.querySelectorAll('*');
-    if (!mappedElements.length || !liveElements.length) return;
+    if (!mappedDoc.body) return;
 
-    const count = Math.min(mappedElements.length, liveElements.length);
-    for (let i = 0; i < count; i++) {
-      const id = mappedElements[i].getAttribute('data-page-studio-source-id');
-      if (id) liveElements[i].setAttribute('data-page-studio-source-id', id);
-    }
+    const mappedElements = mappedDoc.body.querySelectorAll('[data-page-studio-source-id]');
+    mappedElements.forEach((mappedElement) => {
+      const id = mappedElement.getAttribute('data-page-studio-source-id');
+      if (!id) return;
+      const path = structuralPath(mappedElement, mappedDoc.body);
+      if (!path) return;
+      let liveElement = null;
+      try {
+        liveElement = liveDoc.body.querySelector(path);
+      } catch {
+        return;
+      }
+      if (!liveElement || liveElement.tagName.toLowerCase() !== mappedElement.tagName.toLowerCase()) return;
+      liveElement.setAttribute('data-page-studio-source-id', id);
+    });
   }
 
   preview.addEventListener('load', () => {
@@ -215,7 +255,10 @@
         sourceId = target?.getAttribute('data-page-studio-source-id') || '';
       } catch {}
     }
-    if (!sourceId) return;
+    if (!sourceId) {
+      status('That preview item does not map to editable body HTML.', true);
+      return;
+    }
     jumpToSource(sourceMap.get(sourceId));
   });
 })();
