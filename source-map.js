@@ -13,11 +13,39 @@
   let sourceMap = new Map();
   let parse5Promise = null;
   let renderingAnnotatedPreview = false;
+  let highlightTimer = 0;
 
   function status(message, isError = false) {
     if (!statusEl) return;
     statusEl.textContent = message;
     statusEl.style.color = isError ? 'var(--danger)' : '';
+  }
+
+  function ensureHighlightStyle() {
+    if (document.querySelector('style[data-page-studio-source-highlight]')) return;
+    const style = document.createElement('style');
+    style.dataset.pageStudioSourceHighlight = 'true';
+    style.textContent = `
+      #code-editor::selection {
+        background: rgba(210, 184, 117, .46);
+        color: #fffdf4;
+      }
+      #code-editor.page-studio-source-flash::selection {
+        background: rgba(255, 222, 92, .92);
+        color: #07100f;
+      }
+      #code-editor.page-studio-source-flash {
+        animation: page-studio-source-editor-flash .72s ease-out;
+      }
+      @keyframes page-studio-source-editor-flash {
+        0% { box-shadow: inset 0 0 0 3px rgba(255, 222, 92, .95), 0 0 24px rgba(255, 222, 92, .3); }
+        100% { box-shadow: inset 0 0 0 2px rgba(210, 184, 117, .22), 0 0 0 rgba(255, 222, 92, 0); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #code-editor.page-studio-source-flash { animation: none; }
+      }
+    `;
+    document.head.appendChild(style);
   }
 
   function ensureParse5() {
@@ -41,6 +69,17 @@
     workspace.className = 'workspace view-split';
   }
 
+  function flashExactSelection() {
+    ensureHighlightStyle();
+    window.clearTimeout(highlightTimer);
+    editor.classList.remove('page-studio-source-flash');
+    void editor.offsetWidth;
+    editor.classList.add('page-studio-source-flash');
+    highlightTimer = window.setTimeout(() => {
+      editor.classList.remove('page-studio-source-flash');
+    }, 720);
+  }
+
   function jumpToSource(entry) {
     if (!entry || editor.value !== mappedSource) {
       status('The preview is out of sync with the HTML source. Refresh the preview and select the element again.', true);
@@ -52,12 +91,14 @@
     const end = Math.max(start, entry.endOffset);
     editor.focus({ preventScroll: true });
     editor.setSelectionRange(start, end);
+    flashExactSelection();
 
     requestAnimationFrame(() => {
       const before = editor.value.slice(0, start);
       const line = before.split('\n').length;
       const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 20;
-      editor.scrollTop = Math.max(0, (line - 4) * lineHeight);
+      const visibleLines = Math.max(1, Math.floor(editor.clientHeight / lineHeight));
+      editor.scrollTop = Math.max(0, (line - Math.floor(visibleLines / 2)) * lineHeight);
       editor.scrollIntoView({ block: 'center', behavior: 'smooth' });
       status(`Located exact HTML <${entry.tagName}> opening tag at line ${line}.`);
     });
@@ -207,4 +248,6 @@
 
     jumpToSource(sourceMap.get(sourceId));
   });
+
+  ensureHighlightStyle();
 })();
