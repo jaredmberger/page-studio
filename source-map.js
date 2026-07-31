@@ -11,6 +11,7 @@
 
   let mappedSource = '';
   let sourceMap = new Map();
+  let parse5Promise = null;
 
   function status(message, isError = false) {
     if (!statusEl) return;
@@ -19,22 +20,15 @@
   }
 
   function ensureParse5() {
-    if (window.parse5) return Promise.resolve(window.parse5);
-    return new Promise((resolve, reject) => {
-      const existing = document.querySelector('script[data-page-studio-parse5]');
-      if (existing) {
-        existing.addEventListener('load', () => resolve(window.parse5), { once: true });
-        existing.addEventListener('error', reject, { once: true });
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/parse5@7.2.1/dist/cjs/index.min.js';
-      script.async = true;
-      script.dataset.pageStudioParse5 = 'true';
-      script.onload = () => window.parse5 ? resolve(window.parse5) : reject(new Error('parse5 failed to initialize'));
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
+    if (!parse5Promise) {
+      parse5Promise = import('https://cdn.jsdelivr.net/npm/parse5@7.2.1/+esm').then((module) => {
+        if (!module || typeof module.parse !== 'function') {
+          throw new Error('parse5 browser module did not expose parse()');
+        }
+        return module;
+      });
+    }
+    return parse5Promise;
   }
 
   function activateCodeView() {
@@ -120,6 +114,7 @@
     if (!source || !liveDoc?.body) return;
 
     try {
+      status('Mapping preview elements to exact HTML source…');
       const parse5 = await ensureParse5();
       const parsed = parse5.parse(source, { sourceCodeLocationInfo: true });
       const parsedBody = findBodyNode(parsed);
@@ -151,8 +146,13 @@
       console.error('Page Studio source-map error:', error);
       mappedSource = '';
       sourceMap = new Map();
-      status('Exact HTML source mapping could not initialize.', true);
+      status(`Exact HTML source mapping could not initialize: ${error?.message || 'unknown error'}`, true);
     }
+  }
+
+  function findMappedSourceId(target) {
+    if (!target || target.nodeType !== 1) return '';
+    return target.closest('[data-page-studio-source-id]')?.getAttribute('data-page-studio-source-id') || '';
   }
 
   preview.addEventListener('load', () => {
@@ -172,7 +172,7 @@
     if (!sourceId) {
       try {
         const target = preview.contentDocument?.querySelector(data.path || '');
-        sourceId = target?.getAttribute('data-page-studio-source-id') || '';
+        sourceId = findMappedSourceId(target);
       } catch {}
     }
 
