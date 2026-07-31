@@ -2,6 +2,7 @@
   const preview = document.querySelector('#preview');
   const editor = document.querySelector('#code-editor');
   const statusEl = document.querySelector('#status');
+  const workspace = document.querySelector('#workspace');
   if (!preview || !editor) return;
 
   let selectedPath = '';
@@ -16,6 +17,7 @@
   toolbar.innerHTML = `
     <div class="direct-edit-toolbar__label">Selected: <strong data-selected-label>element</strong></div>
     <div class="direct-edit-toolbar__actions">
+      <button type="button" data-direct-action="show-code">Show in Code</button>
       <button type="button" data-direct-action="edit-text">Edit Text</button>
       <button type="button" data-direct-action="duplicate">Duplicate</button>
       <button type="button" data-direct-action="delete">Delete</button>
@@ -87,6 +89,129 @@
     submitHandler = null;
   }
 
+  function switchToSplitView() {
+    const splitButton = document.querySelector('[data-view="split"]');
+    if (splitButton) splitButton.click();
+    else if (workspace) workspace.className = 'workspace view-split';
+  }
+
+  function normalizeText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function escapeRegExp(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function findOpeningTagCandidates(source, tag) {
+    if (!tag) return [];
+    const matches = [];
+    const expression = new RegExp(`<${escapeRegExp(tag)}\\b[^>]*>`, 'gi');
+    let match;
+    while ((match = expression.exec(source))) {
+      matches.push({ start: match.index, end: match.index + match[0].length, openingTag: match[0] });
+      if (match.index === expression.lastIndex) expression.lastIndex++;
+    }
+    return matches;
+  }
+
+  function scoreCandidate(source, candidate, data) {
+    let score = 0;
+    const openingTag = candidate.openingTag;
+    const id = data.id || '';
+    const className = data.className || '';
+    const text = normalizeText(data.text).slice(0, 90);
+
+    if (id && new RegExp(`\\bid\\s*=\\s*(["'])${escapeRegExp(id)}\\1`, 'i').test(openingTag)) score += 1000;
+
+    if (className) {
+      const classes = className.split(/\s+/).filter(Boolean);
+      for (const classToken of classes) {
+        if (new RegExp(`\\bclass\\s*=\\s*(["'])[^"']*\\b${escapeRegExp(classToken)}\\b[^"']*\\1`, 'i').test(openingTag)) score += 80;
+      }
+    }
+
+    if (text) {
+      const searchWindow = normalizeText(source.slice(candidate.start, Math.min(source.length, candidate.start + 5000)));
+      if (searchWindow.includes(text)) score += 300;
+      else {
+        const words = text.split(' ').filter(word => word.length >= 4).slice(0, 8);
+        score += words.filter(word => searchWindow.toLowerCase().includes(word.toLowerCase())).length * 15;
+      }
+    }
+
+    const path = data.path || '';
+    if (path) {
+      const sameTagDepth = path.split('>').filter(part => part.startsWith(`${data.tag}:`)).length;
+      score += Math.min(sameTagDepth, 10);
+    }
+
+    return score;
+  }
+
+  function locateSelectedSource(data) {
+    const source = editor.value;
+    const candidates = findOpeningTagCandidates(source, data.tag || selectedTag);
+    if (!candidates.length) return null;
+
+    const ranked = candidates
+      .map(candidate => ({ ...candidate, score: scoreCandidate(source, candidate, data) }))
+      .sort((a, b) => b.score - a.score || a.start - b.start);
+
+    if (ranked[0].score > 0) return ranked[0];
+
+    const previewDoc = preview.contentDocument;
+    let previewTarget = null;
+    try {
+      previewTarget = data.path && previewDoc ? previewDoc.querySelector(data.path) : null;
+    } catch {}
+
+    if (previewTarget && previewDoc) {
+      const allMatching = [...previewDoc.querySelectorAll(data.tag || selectedTag)];
+      const ordinal = allMatching.indexOf(previewTarget);
+      if (ordinal >= 0 && candidates[ordinal]) return candidates[ordinal];
+    }
+
+    return candidates[0];
+  }
+
+  function scrollSelectionIntoView(start, end) {
+    editor.focus({ preventScroll: true });
+    editor.setSelectionRange(start, end);
+
+    const before = editor.value.slice(0, start);
+    const lineNumber = before.split('\n').length;
+    const computed = getComputedStyle(editor);
+    const parsedLineHeight = Number.parseFloat(computed.lineHeight);
+    const fontSize = Number.parseFloat(computed.fontSize) || 16;
+    const lineHeight = Number.isFinite(parsedLineHeight) ? parsedLineHeight : fontSize * 1.35;
+    const targetTop = Math.max(0, (lineNumber - 1) * lineHeight - editor.clientHeight * 0.35);
+    editor.scrollTop = targetTop;
+    editor.scrollLeft = 0;
+  }
+
+  function jumpSelectedToCode(data = {}) {
+    if (!selectedPath && !data.path) return;
+    const match = locateSelectedSource({
+      path: data.path || selectedPath,
+      tag: data.tag || selectedTag,
+      id: data.id || '',
+      className: data.className || '',
+      text: data.text || selectedText,
+    });
+
+    if (!match) {
+      status(`Selected ${data.tag || selectedTag || 'element'} was found in the preview, but not in the current code.`, true);
+      return;
+    }
+
+    switchToSplitView();
+    requestAnimationFrame(() => {
+      scrollSelectionIntoView(match.start, match.end);
+      status(`Jumped to the selected ${data.tag || selectedTag || 'element'} in code view.`);
+    });
+  }
+
   function mutateSelected(mutator) {
     if (!selectedPath) return;
     const parser = new DOMParser();
@@ -141,6 +266,10 @@
     if (!button) return;
     const action = button.dataset.directAction;
     if (action === 'close') return hideToolbar();
+
+    if (action === 'show-code') {
+      jumpSelectedToCode();
+    }
 
     if (action === 'edit-text') {
       openModal('Edit text', `<label><span>Text</span><textarea name="text" rows="8">${escapeHtml(selectedText)}</textarea></label>`, (data) => {
@@ -265,6 +394,7 @@
     selectedTag = data.tag || '';
     selectedText = data.text || '';
     showToolbar();
+    jumpSelectedToCode(data);
   });
 
   function escapeHtml(value) {
