@@ -16,7 +16,7 @@ Page Studio is the iPad-friendly page editor and publishing companion for Ocean 
 
 Page Studio never writes directly to the production branch. Editing happens inside a sandboxed preview. Publishing requires explicit confirmation and always targets a non-protected branch. The browser never receives or stores the GitHub credential; the Worker reads it from the encrypted `GITHUB_TOKEN` secret.
 
-The Worker also restricts publishing to `ALLOWED_REPOSITORY` and rejects requests from origins not listed in `ALLOWED_ORIGINS`.
+The Worker also restricts publishing to `ALLOWED_REPOSITORY` and rejects requests from origins not listed in `ALLOWED_ORIGINS`. These are defense-in-depth controls; production operator authentication is provided by Cloudflare Access.
 
 ## Deploy the frontend
 
@@ -58,7 +58,9 @@ Do not put the token in `wrangler.toml`, `config.js`, GitHub, or browser storage
 
 6. Redeploy the Worker and frontend.
 
-For another authentication boundary, place the Worker behind Cloudflare Access. The frontend already sends requests with credentials enabled.
+For production, place the publishing Worker behind Cloudflare Access. Origin allow-listing is useful browser/CORS hygiene, but it is not authentication and must not be the only protection on a Worker that can create GitHub branches, commits, and pull requests.
+
+The frontend already sends requests with credentials enabled. Protect the actual Worker hostname used by `config.js` (currently the `workers.dev` hostname), or move the frontend to a dedicated protected API hostname and disable the public `workers.dev` route. Do not place a shared publishing secret in `config.js`, browser storage, or query strings.
 
 ## Worker endpoints
 
