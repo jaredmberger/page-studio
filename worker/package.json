@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "build:meta": "node scripts/write-build-meta.mjs",
+    "test": "node --test tests/runtime-contract.test.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

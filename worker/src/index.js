@@ -1,4 +1,5 @@
 import { publishToGitHub } from "./publisher.js";
+import { BUILD_META } from "../generated/build-meta.js";
 
 const ALLOWED_TARGET_HOSTS = new Set(["oceanliners.net", "www.oceanliners.net"]);
 const DEFAULT_ALLOWED_ORIGINS = ["https://page-studio.pages.dev", "https://page-studio.oceanliners.net"];
@@ -22,6 +23,28 @@ export default {
     }
 
     if (request.method !== "GET") return json({ ok: false, error: "Method not allowed." }, 405, cors);
+
+    if (requestUrl.pathname === "/api/runtime") {
+      const meta = env.CF_VERSION_METADATA || {};
+      return json({
+        ok: true,
+        contractVersion: 1,
+        service: "Page Studio Loader",
+        repository: "jaredmberger/page-studio",
+        productionBranch: "main",
+        version: "1.0.0",
+        commit: BUILD_META.commit || null,
+        cloudflareDeploymentId: meta.id || null,
+        runtime: "cloudflare-workers",
+        cloudflareVersion: {
+          id: meta.id || null,
+          tag: meta.tag || null,
+          timestamp: meta.timestamp || null
+        },
+        build: BUILD_META,
+        observedAt: new Date().toISOString()
+      }, 200, cors);
+    }
 
     if (requestUrl.pathname === "/api/status") {
       return json({
